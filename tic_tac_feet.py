@@ -97,7 +97,9 @@ class BoardSelectButton(discord.ui.Button):
         await interaction.response.defer()  # 👈 tells Discord “I got this!”
         
         content = f"<@{self.game.player1}> vs <@{self.game.player2}>\n"
-        content += f"It's <@{self.game.current_turn}>'s turn.\n\n"
+        symbol = "❌" if self.game.current_turn == self.game.player1 else "🟢"
+        content += f"It's {symbol} <@{self.game.current_turn}>'s turn.\n\n"
+
         content += self.game.render_board() + "\n​"
         await self.game.message.edit(content=content, view=TileSelectView(self.game))
 
@@ -106,14 +108,32 @@ class TileSelectView(discord.ui.View):
     def __init__(self, game: GameState):
         super().__init__(timeout=None)
         self.game = game
-        for i in range(9):
-            if self.game.tiles[self.game.active_board][i] is None:
-                self.add_item(TileSelectButton(i, game))
+        current_board = self.game.active_board
+
+        for tile_index in range(9):
+            tile_value = self.game.tiles[current_board][tile_index]
+            self.add_item(TileSelectButton(tile_index, game, tile_value))
+
 
 
 class TileSelectButton(discord.ui.Button):
-    def __init__(self, tile_index: int, game: GameState):
-        super().__init__(label=str(tile_index), style=discord.ButtonStyle.secondary, row=tile_index // 3)
+    def __init__(self, tile_index: int, game: GameState, value: str | None):
+        row = tile_index // 3
+        label = "\u200B"
+        style = discord.ButtonStyle.secondary
+        disabled = False
+
+        if value == "X":
+            label = "❌"
+            style = discord.ButtonStyle.danger
+            disabled = True
+        elif value == "O":
+            label = "🟢"
+            style = discord.ButtonStyle.success
+            disabled = True
+
+        super().__init__(label=label, style=style, row=row, disabled=disabled)
+
         self.tile_index = tile_index
         self.game = game
 
@@ -125,29 +145,26 @@ class TileSelectButton(discord.ui.Button):
         board = self.game.active_board
         self.game.tiles[board][self.tile_index] = "X" if self.game.current_turn == self.game.player1 else "O"
 
-        # Update next active board
+        # Determine next active board
         next_board = self.tile_index
-        # If the next board is full, allow free board selection
-        if any(tile is None for tile in self.game.tiles[next_board]):
+        if self.game.meta_board[next_board] is None and any(tile is None for tile in self.game.tiles[next_board]):
             self.game.active_board = next_board
         else:
-            self.game.active_board = None  # Open play
+            self.game.active_board = None  # Free play
 
         # Switch turn
         self.game.current_turn = self.game.player2 if self.game.current_turn == self.game.player1 else self.game.player1
 
-        await interaction.response.defer()  # 👈 tells Discord “I got this!”
-        
-        # Update message
+        await interaction.response.defer()
+
         content = f"🎮 <@{self.game.player1}> vs <@{self.game.player2}>\n"
-        content += f"It's <@{self.game.current_turn}>'s turn.\n\n"
+        symbol = "❌" if self.game.current_turn == self.game.player1 else "🟢"
+        content += f"It's {symbol} <@{self.game.current_turn}>'s turn.\n\n"
         content += self.game.render_board() + "\n\u200B"
 
         if self.game.active_board is None:
-            # Let the next player choose any board
             await self.game.message.edit(content=content, view=BoardSelectView(self.game))
         else:
-            # Only show buttons for the active board
             await self.game.message.edit(content=content, view=TileSelectView(self.game))
         
 
