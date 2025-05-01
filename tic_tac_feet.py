@@ -3,7 +3,9 @@ import random
 
 
 from discord import app_commands
+# allegedly can remove
 from discord.ext import tasks
+
 from secrets import DISCORD_TOKEN
 
 
@@ -36,7 +38,7 @@ class GameState:
     def __init__(self, player1, player2):
         self.player1 = player1
         self.player2 = player2
-        self.current_turn = player1
+        self.current_turn = random.choice([player1, player2])
         self.meta_board = [None] * 9  # Each small board state
         self.tiles = [[None for _ in range(9)] for _ in range(9)]  # 9 boards of 9 tiles
         self.active_board = None  # None = free choice
@@ -87,11 +89,14 @@ class BoardSelectButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.game.current_turn:
-            await interaction.response.send_message("⛔ Not your turn.", ephemeral=True)
+            await interaction.response.send_message("⛔ Not your turn.", ephemeral=True, delete_after=4)
             return
 
         self.game.active_board = self.board_index
-        content = f"🎮 <@{self.game.player1}> vs <@{self.game.player2}>\n"
+        
+        await interaction.response.defer()  # 👈 tells Discord “I got this!”
+        
+        content = f"<@{self.game.player1}> vs <@{self.game.player2}>\n"
         content += f"It's <@{self.game.current_turn}>'s turn.\n\n"
         content += self.game.render_board() + "\n​"
         await self.game.message.edit(content=content, view=TileSelectView(self.game))
@@ -114,7 +119,7 @@ class TileSelectButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.game.current_turn:
-            await interaction.response.send_message("⛔ Not your turn.", ephemeral=True)
+            await interaction.response.send_message("⛔ Not your turn.", ephemeral=True, delete_after=4)
             return
 
         board = self.game.active_board
@@ -131,11 +136,19 @@ class TileSelectButton(discord.ui.Button):
         # Switch turn
         self.game.current_turn = self.game.player2 if self.game.current_turn == self.game.player1 else self.game.player1
 
+        await interaction.response.defer()  # 👈 tells Discord “I got this!”
+        
         # Update message
         content = f"🎮 <@{self.game.player1}> vs <@{self.game.player2}>\n"
         content += f"It's <@{self.game.current_turn}>'s turn.\n\n"
-        content += self.game.render_board() + "\n​"
-        await self.game.message.edit(content=content, view=BoardSelectView(self.game))
+        content += self.game.render_board() + "\n\u200B"
+
+        if self.game.active_board is None:
+            # Let the next player choose any board
+            await self.game.message.edit(content=content, view=BoardSelectView(self.game))
+        else:
+            # Only show buttons for the active board
+            await self.game.message.edit(content=content, view=TileSelectView(self.game))
         
 
 # PLAY COMMAND 
