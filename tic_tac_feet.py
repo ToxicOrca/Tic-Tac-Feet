@@ -29,147 +29,114 @@ class MyClient(discord.Client):
 
 client = MyClient()
 
-# RENDER LARGE BOARD
-def render_meta_board(meta_board: list[str | None], active_board: int) -> str:
-    result = ""
-    for row in range(3):
-        for inner_row in range(3):
-            line = ""
-            for col in range(3):
-                board_index = row * 3 + col
-                for inner_col in range(3):
-                    # Placeholder tile display
-                    if meta_board[board_index] == "X":
-                        emoji = "❌"
-                    elif meta_board[board_index] == "O":
-                        emoji = "🟢"
-                    elif active_board is not None and board_index == active_board:
-                        emoji = "🟨"
-                    else:
-                        emoji = "⬛"
-                    line += emoji
-                if col < 2:
-                    line += " | "
-            result += line + "\n"
-        if row < 2:
-            result += "―" * 16 + "\n"
-    return result
 
 
 
-class TicTacFeetLocalButton(discord.ui.Button):
-    def __init__(self, tile_index: int):
-        super().__init__(
-            style=discord.ButtonStyle.secondary,
-            label="\u200b",
-            row=tile_index // 3
-        )
-        self.tile_index = tile_index
-
-    async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_message(
-            f"You clicked tile {self.tile_index} in the active board!",
-            ephemeral=True,
-            delete_after=2
-        )
-
-
-class TicTacFeetLocalBoardView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-        for i in range(9):
-            self.add_item(TicTacFeetLocalButton(i))
-
-
-class TicTacFeetButton(discord.ui.Button):
-    def __init__(self, x: int, y: int):
-        super().__init__(style=discord.ButtonStyle.secondary, label="\u200b", row=y)
-        self.x = x
-        self.y = y
-
-    async def callback(self, interaction: discord.Interaction):
-        view: TicTacFeetView = self.view
-        player = interaction.user
-
-        # Prevent wrong player from moving
-        if player.id != view.current_turn:
-            await interaction.response.send_message("⛔ It's not your turn!", ephemeral=True, delete_after=2)
-            return
-
-        # Mark the cell
-        symbol = "X" if player.id == view.player1 else "O"
-        self.label = symbol
-        self.style = discord.ButtonStyle.danger if symbol == "X" else discord.ButtonStyle.success
-        self.disabled = True
-        view.board[self.y][self.x] = symbol
-        await interaction.response.edit_message(view=view)
-
-        # Check for win
-        winner = view.check_winner()
-        if winner:
-            for child in view.children:
-                child.disabled = True
-                
-            # clean up
-            game_key = tuple(sorted((view.player1, view.player2)))
-            active_games.pop(game_key, None)
-
-            # Determine who won
-            winner_id = view.player1 if winner == "X" else view.player2
-            await interaction.followup.send(f"🏆 <@{winner_id}> wins!")
-            await interaction.message.edit(view=view)  # Update disabled board
-            return
-        
-        # Check for tie
-        if view.check_tie():
-            for child in view.children:
-                child.disabled = True
-            
-            # clean up
-            game_key = tuple(sorted((view.player1, view.player2)))
-            active_games.pop(game_key, None)
-            
-            await interaction.followup.send(f"🤝 <@{view.player1}> and <@{view.player2}> tied!")
-            await interaction.message.edit(view=view)
-            return
-
-        # Switch turns
-        view.current_turn = view.player2 if player.id == view.player1 else view.player1
-
-
-class TicTacFeetView(discord.ui.View):
-    def __init__(self, player1: int, player2: int):
-        super().__init__(timeout=None)
+class GameState:
+    def __init__(self, player1, player2):
         self.player1 = player1
         self.player2 = player2
-        self.current_turn = random.choice([player1, player2])
-        self.board = [["" for _ in range(3)] for _ in range(3)]
+        self.current_turn = player1
+        self.meta_board = [None] * 9  # Each small board state
+        self.tiles = [[None for _ in range(9)] for _ in range(9)]  # 9 boards of 9 tiles
+        self.active_board = None  # None = free choice
+        self.message = None
 
-        for y in range(3):
-            for x in range(3):
-                self.add_item(TicTacFeetButton(x, y))
 
-    def check_winner(self):
-        # Horizontal, Vertical, Diagonal
-        lines = []
 
-        # Rows and columns
-        for i in range(3):
-            lines.append(self.board[i])  # rows
-            lines.append([self.board[0][i], self.board[1][i], self.board[2][i]])  # cols
+# RENDER LARGE BOARD
+    def render_board(self):
+        result = ""
+        for row in range(3):
+            for inner_row in range(3):
+                line = ""
+                for col in range(3):
+                    board_index = row * 3 + col
+                    for inner_col in range(3):
+                        tile_index = inner_row * 3 + inner_col
+                        tile = self.tiles[board_index][tile_index]
+                        if tile == "X":
+                            emoji = "❌"
+                        elif tile == "O":
+                            emoji = "🟢"
+                        elif self.active_board == board_index:
+                            emoji = "🟨"
+                        else:
+                            emoji = "⬛"
+                        line += emoji
+                    if col < 2:
+                        line += " | "
+                result += line + "\n"
+            if row < 2:
+                result += "―" * 16 + "\n"
+        return result
 
-        # Diagonals
-        lines.append([self.board[0][0], self.board[1][1], self.board[2][2]])
-        lines.append([self.board[0][2], self.board[1][1], self.board[2][0]])
+class BoardSelectView(discord.ui.View):
+    def __init__(self, game: GameState):
+        super().__init__(timeout=None)
+        self.game = game
+        for i in range(9):
+            self.add_item(BoardSelectButton(i, game))
 
-        for line in lines:
-            if line[0] != "" and all(cell == line[0] for cell in line):
-                return line[0]
-        return None
 
-    def check_tie(self):
-        return all(cell != "" for row in self.board for cell in row)
+class BoardSelectButton(discord.ui.Button):
+    def __init__(self, board_index: int, game: GameState):
+        super().__init__(label=str(board_index), style=discord.ButtonStyle.primary, row=board_index // 3)
+        self.board_index = board_index
+        self.game = game
 
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.game.current_turn:
+            await interaction.response.send_message("⛔ Not your turn.", ephemeral=True)
+            return
+
+        self.game.active_board = self.board_index
+        content = f"🎮 <@{self.game.player1}> vs <@{self.game.player2}>\n"
+        content += f"It's <@{self.game.current_turn}>'s turn.\n\n"
+        content += self.game.render_board() + "\n​"
+        await self.game.message.edit(content=content, view=TileSelectView(self.game))
+
+
+class TileSelectView(discord.ui.View):
+    def __init__(self, game: GameState):
+        super().__init__(timeout=None)
+        self.game = game
+        for i in range(9):
+            if self.game.tiles[self.game.active_board][i] is None:
+                self.add_item(TileSelectButton(i, game))
+
+
+class TileSelectButton(discord.ui.Button):
+    def __init__(self, tile_index: int, game: GameState):
+        super().__init__(label=str(tile_index), style=discord.ButtonStyle.secondary, row=tile_index // 3)
+        self.tile_index = tile_index
+        self.game = game
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.game.current_turn:
+            await interaction.response.send_message("⛔ Not your turn.", ephemeral=True)
+            return
+
+        board = self.game.active_board
+        self.game.tiles[board][self.tile_index] = "X" if self.game.current_turn == self.game.player1 else "O"
+
+        # Update next active board
+        next_board = self.tile_index
+        # If the next board is full, allow free board selection
+        if any(tile is None for tile in self.game.tiles[next_board]):
+            self.game.active_board = next_board
+        else:
+            self.game.active_board = None  # Open play
+
+        # Switch turn
+        self.game.current_turn = self.game.player2 if self.game.current_turn == self.game.player1 else self.game.player1
+
+        # Update message
+        content = f"🎮 <@{self.game.player1}> vs <@{self.game.player2}>\n"
+        content += f"It's <@{self.game.current_turn}>'s turn.\n\n"
+        content += self.game.render_board() + "\n​"
+        await self.game.message.edit(content=content, view=BoardSelectView(self.game))
+        
 
 # PLAY COMMAND 
 @client.tree.command(name="play", description="Start a full Tic-Tac-Feet game with your opponent")
@@ -184,26 +151,17 @@ async def play(interaction: discord.Interaction, opponent: discord.User):
         await interaction.response.send_message("⚠️ You already have an active game with this player.", ephemeral=True, delete_after=4)
         return
 
-    # Initialize game state
-    meta_board = [None] * 9
-    active_board = None  # No board is active until the first move
+    game = GameState(interaction.user.id, opponent.id)
+    view = BoardSelectView(game)
+    content = f"🎮 <@{game.player1}> vs <@{game.player2}>\n"
+    content += f"<@{game.current_turn}> goes first!\n\n"
+    content += game.render_board() + "\n\u200B"
 
-    # Render visual board
-    visual = render_meta_board(meta_board, active_board)
-    view = TicTacFeetLocalBoardView()
+    message = await interaction.response.send_message(content=content, view=view)
+    game.message = await interaction.original_response()
 
-    active_games[game_key] = {
-        "meta_board": meta_board,
-        "active_board": active_board,
-        "current_turn": random.choice(game_key),
-    }
+    active_games[game_key] = game
 
-    await interaction.response.send_message(
-        content=f"🎮 **Tic-Tac-Feet**: <@{interaction.user.id}> vs <@{opponent.id}>\n"
-                f"<@{active_games[game_key]['current_turn']}> goes first!\n\n"
-                f"{visual}",
-        view=view
-    )
 
 
 
@@ -232,44 +190,10 @@ async def resign(interaction: discord.Interaction):
 
 
 
-class TicTacFeetTileButton(discord.ui.Button):
-    def __init__(self, board_index: int, tile_index: int, active: bool):
-        # Each board has 3 rows, so this spreads them out
-        row = (board_index // 3) * 3 + (tile_index // 3)
-        col = (board_index % 3) * 3 + (tile_index % 3)
-
-        super().__init__(
-            style=discord.ButtonStyle.secondary,
-            label="\u200b",
-            row=row
-        )
-        
-        self.board_index = board_index
-        self.tile_index = tile_index
-        self.disabled = not active
-
-    async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_message(
-            f"You clicked tile {self.tile_index} in board {self.board_index}",
-            ephemeral=True,
-            delete_after=3
-        )
 
 
 
-class TicTacFeetGameView(discord.ui.View):
-    def __init__(self, player1: int, player2: int):
-        super().__init__(timeout=None)
-        self.player1 = player1
-        self.player2 = player2
-        self.current_turn = random.choice([player1, player2])
-        self.active_board = 4  # Default to center board
 
-        # Generate 9 boards, each with 9 tiles
-        for board_index in range(9):
-            for tile_index in range(9):
-                is_active = (board_index == self.active_board)
-                self.add_item(TicTacFeetTileButton(board_index, tile_index, active=is_active))
 
 
 
