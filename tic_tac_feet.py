@@ -23,7 +23,9 @@ class MyClient(discord.Client):
 
     async def on_ready(self):
         synced = await self.tree.sync()
-        print(f"Logged in as {self.user} and synced commands.")
+        print(f"Synced commands: {[cmd.name for cmd in synced]}")
+        print(f"Logged in as {self.user}")
+        
 
 client = MyClient()
 
@@ -145,6 +147,30 @@ async def play(interaction: discord.Interaction, opponent: discord.User):
         f"<@{view.current_turn}> goes first!",
         view=view,
         delete_after=60 * 10  # Board disappears after 10 minutes
+    )
+
+
+# RESIGN COMMAND
+@client.tree.command(name="resign", description="Resign from your current Tic-Tac-Feet game")
+async def resign(interaction: discord.Interaction):
+    user_id = interaction.user.id
+
+    # Try to find the user's game
+    for key in list(active_games.keys()):
+        if user_id in key:
+            # Found the game
+            opponent_id = key[0] if key[1] == user_id else key[1]
+            active_games.pop(key, None)
+
+            await interaction.response.send_message(
+                f"🏳️ <@{user_id}> has resigned. <@{opponent_id}> wins by forfeit!")
+            return
+
+    # No game found
+    await interaction.response.send_message(
+        "⚠️ You are not currently in an active game.",
+        ephemeral=True,
+        delete_after=4
     )
 
 
