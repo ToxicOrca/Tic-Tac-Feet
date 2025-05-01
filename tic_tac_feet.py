@@ -27,47 +27,6 @@ class MyClient(discord.Client):
 
 client = MyClient()
 
-@client.tree.command(name="start", description="Start a new game of Tic-Tac-Feet")
-async def start(interaction: discord.Interaction):
-    await interaction.response.send_message("🎮 Tic-Tac-Feet game started!", ephemeral=False, delete_after=4)
-
-@client.tree.command(name="challenge", description="Challenge another player to Tic-Tac-Feet")
-@app_commands.describe(opponent="The user you want to challenge")
-async def challenge(interaction: discord.Interaction, opponent: discord.User):
-    #  Restrict command to #tic-tac-feet
-    channel = interaction.channel
-    if channel.name != "tic-tac-feet":
-        await interaction.response.send_message("🚫 You can only start games in the #tic-tac-feet channel.", ephemeral=True, delete_after=4)
-        return    
-    
-    user_id = interaction.user.id
-    opponent_id = opponent.id
-
-    if user_id == opponent_id:
-        await interaction.response.send_message("😅 You can't challenge yourself!", ephemeral=True, delete_after=4)
-        return
-
-    game_key = tuple(sorted((user_id, opponent_id)))
-
-    if game_key in active_games:
-        await interaction.response.send_message("⚠️ You already have an active game with this player.", ephemeral=True, delete_after=4)
-        return
-
-    # Initialize game board (list of 9 empty strings)
-    board = [" " for _ in range(9)]
-
-    active_games[game_key] = {
-        "player1": user_id,
-        "player2": opponent_id,
-        "turn": random.choice([user_id, opponent_id]),
-        "board": board,
-        "channel": interaction.channel_id  # optional, useful later
-    }
-
-    await interaction.response.send_message(
-        f"🎮 {interaction.user.mention} has challenged {opponent.mention} to a game of Tic-Tac-Feet!\n"
-        f"{interaction.user.mention} goes first. Use `/play position:` to make your move (1-9)."
-    )
 
 
 
@@ -99,16 +58,26 @@ class TicTacFeetButton(discord.ui.Button):
         if winner:
             for child in view.children:
                 child.disabled = True
+                
+            # clean up
+            game_key = tuple(sorted((view.player1, view.player2)))
+            active_games.pop(game_key, None)
+
             # Determine who won
             winner_id = view.player1 if winner == "X" else view.player2
             await interaction.followup.send(f"🏆 <@{winner_id}> wins!")
             await interaction.message.edit(view=view)  # Update disabled board
             return
-
+        
         # Check for tie
         if view.check_tie():
             for child in view.children:
                 child.disabled = True
+            
+            # clean up
+            game_key = tuple(sorted((view.player1, view.player2)))
+            active_games.pop(game_key, None)
+            
             await interaction.followup.send(f"🤝 <@{view.player1}> and <@{view.player2}> tied!")
             await interaction.message.edit(view=view)
             return
@@ -159,10 +128,21 @@ async def play(interaction: discord.Interaction, opponent: discord.User):
         await interaction.response.send_message("😅 You can't play against yourself!", ephemeral=True, delete_after=4)
         return
 
+    # Sort the player IDs to create a consistent key
+    game_key = tuple(sorted((interaction.user.id, opponent.id)))
+
+    # Prevent duplicate games
+    if game_key in active_games:
+        await interaction.response.send_message("⚠️ You already have an active game with this player.", ephemeral=True, delete_after=4)
+        return
+
+    # Create game and view
     view = TicTacFeetView(interaction.user.id, opponent.id)
+    active_games[game_key] = view  # You can store the view or game metadata here
+
     await interaction.response.send_message(
         f"🎮 Tic-Tac-Feet: <@{interaction.user.id}> vs <@{opponent.id}>!\n"
-        f"<@{interaction.user.id}> goes first as ❌",
+        f"<@{view.current_turn}> goes first!",
         view=view,
         delete_after=60 * 10  # Board disappears after 10 minutes
     )
