@@ -29,7 +29,56 @@ class MyClient(discord.Client):
 
 client = MyClient()
 
+# RENDER LARGE BOARD
+def render_meta_board(meta_board: list[str | None], active_board: int) -> str:
+    result = ""
+    for row in range(3):
+        for inner_row in range(3):
+            line = ""
+            for col in range(3):
+                board_index = row * 3 + col
+                for inner_col in range(3):
+                    # Placeholder tile display
+                    if meta_board[board_index] == "X":
+                        emoji = "❌"
+                    elif meta_board[board_index] == "O":
+                        emoji = "🟢"
+                    elif active_board is not None and board_index == active_board:
+                        emoji = "🟨"
+                    else:
+                        emoji = "⬛"
+                    line += emoji
+                if col < 2:
+                    line += " | "
+            result += line + "\n"
+        if row < 2:
+            result += "―" * 16 + "\n"
+    return result
 
+
+
+class TicTacFeetLocalButton(discord.ui.Button):
+    def __init__(self, tile_index: int):
+        super().__init__(
+            style=discord.ButtonStyle.secondary,
+            label="\u200b",
+            row=tile_index // 3
+        )
+        self.tile_index = tile_index
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_message(
+            f"You clicked tile {self.tile_index} in the active board!",
+            ephemeral=True,
+            delete_after=2
+        )
+
+
+class TicTacFeetLocalBoardView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        for i in range(9):
+            self.add_item(TicTacFeetLocalButton(i))
 
 
 class TicTacFeetButton(discord.ui.Button):
@@ -122,32 +171,40 @@ class TicTacFeetView(discord.ui.View):
         return all(cell != "" for row in self.board for cell in row)
 
 
-# /play command set up
-@client.tree.command(name="play", description="Start an interactive Tic-Tac-Feet game with your opponent")
+# PLAY COMMAND 
+@client.tree.command(name="play", description="Start a full Tic-Tac-Feet game with your opponent")
 @app_commands.describe(opponent="The user you are playing against")
 async def play(interaction: discord.Interaction, opponent: discord.User):
     if interaction.user.id == opponent.id:
         await interaction.response.send_message("😅 You can't play against yourself!", ephemeral=True, delete_after=4)
         return
 
-    # Sort the player IDs to create a consistent key
     game_key = tuple(sorted((interaction.user.id, opponent.id)))
-
-    # Prevent duplicate games
     if game_key in active_games:
         await interaction.response.send_message("⚠️ You already have an active game with this player.", ephemeral=True, delete_after=4)
         return
 
-    # Create game and view
-    view = TicTacFeetView(interaction.user.id, opponent.id)
-    active_games[game_key] = view  # You can store the view or game metadata here
+    # Initialize game state
+    meta_board = [None] * 9
+    active_board = None  # No board is active until the first move
+
+    # Render visual board
+    visual = render_meta_board(meta_board, active_board)
+    view = TicTacFeetLocalBoardView()
+
+    active_games[game_key] = {
+        "meta_board": meta_board,
+        "active_board": active_board,
+        "current_turn": random.choice(game_key),
+    }
 
     await interaction.response.send_message(
-        f"🎮 Tic-Tac-Feet: <@{interaction.user.id}> vs <@{opponent.id}>!\n"
-        f"<@{view.current_turn}> goes first!",
-        view=view,
-        delete_after=60 * 10  # Board disappears after 10 minutes
+        content=f"🎮 **Tic-Tac-Feet**: <@{interaction.user.id}> vs <@{opponent.id}>\n"
+                f"<@{active_games[game_key]['current_turn']}> goes first!\n\n"
+                f"{visual}",
+        view=view
     )
+
 
 
 # RESIGN COMMAND
@@ -172,6 +229,48 @@ async def resign(interaction: discord.Interaction):
         ephemeral=True,
         delete_after=4
     )
+
+
+
+class TicTacFeetTileButton(discord.ui.Button):
+    def __init__(self, board_index: int, tile_index: int, active: bool):
+        # Each board has 3 rows, so this spreads them out
+        row = (board_index // 3) * 3 + (tile_index // 3)
+        col = (board_index % 3) * 3 + (tile_index % 3)
+
+        super().__init__(
+            style=discord.ButtonStyle.secondary,
+            label="\u200b",
+            row=row
+        )
+        
+        self.board_index = board_index
+        self.tile_index = tile_index
+        self.disabled = not active
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_message(
+            f"You clicked tile {self.tile_index} in board {self.board_index}",
+            ephemeral=True,
+            delete_after=3
+        )
+
+
+
+class TicTacFeetGameView(discord.ui.View):
+    def __init__(self, player1: int, player2: int):
+        super().__init__(timeout=None)
+        self.player1 = player1
+        self.player2 = player2
+        self.current_turn = random.choice([player1, player2])
+        self.active_board = 4  # Default to center board
+
+        # Generate 9 boards, each with 9 tiles
+        for board_index in range(9):
+            for tile_index in range(9):
+                is_active = (board_index == self.active_board)
+                self.add_item(TicTacFeetTileButton(board_index, tile_index, active=is_active))
+
 
 
 client.run(DISCORD_TOKEN)
