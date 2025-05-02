@@ -208,7 +208,7 @@ class TileSelectButton(discord.ui.Button):
         
         await interaction.response.defer()     
 
-        content = f"🎮 <@{self.game.player1}> vs <@{self.game.player2}>\n"
+        content = f"<@{self.game.player1}> vs <@{self.game.player2}>\n"
         symbol = "❌" if self.game.current_turn == self.game.player1 else "🟢"
         content += f"It's {symbol} <@{self.game.current_turn}>'s turn.\n\n"
         content += self.game.render_board() + "\n\u200B"
@@ -255,7 +255,7 @@ async def play(interaction: discord.Interaction, opponent: discord.User):
 
     game = GameState(interaction.user.id, opponent.id)
     view = BoardSelectView(game)
-    content = f"🎮 <@{game.player1}> vs <@{game.player2}>\n"
+    content = f"<@{game.player1}> vs <@{game.player2}>\n"
     content += f"<@{game.current_turn}> goes first!\n\n"
     content += game.render_board() + "\n\u200B"
 
