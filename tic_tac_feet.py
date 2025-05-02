@@ -40,6 +40,8 @@ class GameState:
         self.tiles = [[None for _ in range(9)] for _ in range(9)]  # 9 boards of 9 tiles
         self.active_board = None  # None = free choice
         self.message = None
+        self.meta_winner = None
+
     
     def check_winner(self, board: list[str | None]) -> str | None:
         win_patterns = [
@@ -55,17 +57,24 @@ class GameState:
     def place_tile(self, board_index: int, tile_index: int, symbol: str):
         self.tiles[board_index][tile_index] = symbol
 
-        # Check for win on this board
+        # Check for win on this small board
         if self.meta_board[board_index] is None:
             winner = self.check_winner(self.tiles[board_index])
             if winner:
                 self.meta_board[board_index] = winner
 
+        # 🔥 Check for win on meta board
+        meta_winner = self.check_winner(self.meta_board)
+        if meta_winner:
+            self.meta_winner = meta_winner  # Save the winner to use elsewhere
+            return  # Skip further processing
+
         # Decide next active board
         if self.meta_board[tile_index] is None and any(t is None for t in self.tiles[tile_index]):
             self.active_board = tile_index
         else:
-            self.active_board = None  # Free play
+            self.active_board = None
+
 
 
 
@@ -156,28 +165,15 @@ class TileSelectView(discord.ui.View):
         super().__init__(timeout=None)
         self.game = game
 
-        boards_to_render = (
-            [game.active_board] if game.active_board is not None
-            else list(range(9))  # Free select
-        )
+        board_index = game.active_board if game.active_board is not None else 0
 
-        for board_index in boards_to_render:
-            board_won = game.meta_board[board_index] is not None
+        for tile_index in range(9):
+            tile_value = game.tiles[board_index][tile_index]
+            row = tile_index // 3
 
-            for tile_index in range(9):
-                tile_value = game.tiles[board_index][tile_index]
-                row = (board_index * 3) + (tile_index // 3)
+            is_clickable = tile_value not in ("X", "O")
 
-
-                # Always show the button, but disable it if:
-                # - the tile is already played
-                # - or we're in free select and the board is won
-                is_clickable = True
-                if tile_value in ("X", "O") or (game.active_board is None and board_won):
-                    is_clickable = False
-
-                self.add_item(TileSelectButton(tile_index, game, tile_value, row, board_index, active=is_clickable))
-
+            self.add_item(TileSelectButton(tile_index, game, tile_value, row, board_index, active=is_clickable))
 
 class TileSelectButton(discord.ui.Button):
     def __init__(self, tile_index: int, game: GameState, value: str | None, row: int, board_index: int, active: bool):
@@ -209,8 +205,21 @@ class TileSelectButton(discord.ui.Button):
         self.game.place_tile(self.board_index, self.tile_index, symbol)
 
         self.game.current_turn = self.game.player2 if self.game.current_turn == self.game.player1 else self.game.player1
-
+        
         await interaction.response.defer()
+        
+        # Check for game win big board
+        if self.game.meta_winner:
+            winner = self.game.meta_winner
+            symbol = "❌" if winner == "X" else "🟢"
+            await interaction.followup.send(
+                f"🏆 {symbol} <@{self.game.player1 if winner == 'X' else self.game.player2}> **wins the game!**"
+            )
+            game_key = tuple(sorted((self.game.player1, self.game.player2)))
+            active_games.pop(game_key, None)
+            return
+
+        
 
         content = f"🎮 <@{self.game.player1}> vs <@{self.game.player2}>\n"
         symbol = "❌" if self.game.current_turn == self.game.player1 else "🟢"
