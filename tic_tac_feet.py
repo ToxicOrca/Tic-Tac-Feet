@@ -134,8 +134,8 @@ class BoardSelectView(discord.ui.View):
 class BoardSelectButton(discord.ui.Button):
     def __init__(self, board_index: int, game: GameState, row: int, disabled: bool):
         super().__init__(
-            label=str(board_index),
-            style=discord.ButtonStyle.primary,
+            label="🟨",
+            style=discord.ButtonStyle.secondary,
             row=row,
             disabled=disabled
         )
@@ -244,6 +244,9 @@ class TileSelectButton(discord.ui.Button):
 @client.tree.command(name="play", description="Start a full Tic-Tac-Feet game with your opponent")
 @app_commands.describe(opponent="The user you are playing against")
 async def play(interaction: discord.Interaction, opponent: discord.User):
+    if interaction.channel.name != "tic-tac-feet":
+        await interaction.response.send_message("⛔ This game can only be played in #tic-tac-feet.", ephemeral=True, delete_after=4)
+        return
     if interaction.user.id == opponent.id:
         await interaction.response.send_message("😅 You can't play against yourself!", ephemeral=True, delete_after=4)
         return
@@ -270,6 +273,9 @@ async def play(interaction: discord.Interaction, opponent: discord.User):
 # RESIGN COMMAND
 @client.tree.command(name="resign", description="Resign from your current Tic-Tac-Feet game")
 async def resign(interaction: discord.Interaction):
+    if interaction.channel.name != "tic-tac-feet":
+        await interaction.response.send_message("⛔ This command only works in #tic-tac-feet.", ephemeral=True, delete_after=4)
+        return
     user_id = interaction.user.id
 
     # Try to find the user's game
