@@ -115,13 +115,14 @@ class BoardSelectView(discord.ui.View):
         self.game = game
         for i in range(9):
             if game.meta_board[i] is None:
-                self.add_item(BoardSelectButton(i, game))
+                row = i // 3
+                self.add_item(BoardSelectButton(i, game, row))
 
 
 
 class BoardSelectButton(discord.ui.Button):
-    def __init__(self, board_index: int, game: GameState):
-        super().__init__(label=str(board_index), style=discord.ButtonStyle.primary, row=board_index // 3)
+    def __init__(self, board_index: int, game: GameState, row: int):
+        super().__init__(label=str(board_index), style=discord.ButtonStyle.primary, row=row)
         self.board_index = board_index
         self.game = game
 
@@ -146,24 +147,27 @@ class TileSelectView(discord.ui.View):
     def __init__(self, game: GameState):
         super().__init__(timeout=None)
         self.game = game
-        current_board = self.game.active_board
-        
-        # Skip if the board is already won (should never get here in theory)
-        if game.meta_board[current_board] is not None:
-            return
 
-        for tile_index in range(9):
-            tile_value = self.game.tiles[current_board][tile_index]
-            row = tile_index // 3
-            self.add_item(TileSelectButton(tile_index, game, tile_value, row))
+        # Only render 1 board (active or all available if free)
+        boards_to_render = (
+            [game.active_board] if game.active_board is not None
+            else [i for i in range(9) if game.meta_board[i] is None]
+        )
+
+        for board_index in boards_to_render:
+            for tile_index in range(9):
+                tile_value = self.game.tiles[board_index][tile_index]
+                row = tile_index // 3
+                is_board_active = True
+                self.add_item(TileSelectButton(tile_index, game, tile_value, row, board_index, active=is_board_active))
 
 
 
 class TileSelectButton(discord.ui.Button):
-    def __init__(self, tile_index: int, game: GameState, value: str | None, row: int):
+    def __init__(self, tile_index: int, game: GameState, value: str | None, row: int, board_index: int, active: bool):
         label = "\u200B"
         style = discord.ButtonStyle.secondary
-        disabled = False
+        disabled = not active  # disable if this board is not selectable
 
         if value == "X":
             label = "❌"
@@ -177,6 +181,7 @@ class TileSelectButton(discord.ui.Button):
         super().__init__(label=label, style=style, row=row, disabled=disabled)
 
         self.tile_index = tile_index
+        self.board_index = board_index
         self.game = game
 
     async def callback(self, interaction: discord.Interaction):
@@ -185,10 +190,8 @@ class TileSelectButton(discord.ui.Button):
             return
 
         symbol = "X" if self.game.current_turn == self.game.player1 else "O"
-        self.game.place_tile(self.game.active_board, self.tile_index, symbol)
+        self.game.place_tile(self.board_index, self.tile_index, symbol)
 
-
-        # Switch turn
         self.game.current_turn = self.game.player2 if self.game.current_turn == self.game.player1 else self.game.player1
 
         await interaction.response.defer()
@@ -202,7 +205,7 @@ class TileSelectButton(discord.ui.Button):
             await self.game.message.edit(content=content, view=BoardSelectView(self.game))
         else:
             await self.game.message.edit(content=content, view=TileSelectView(self.game))
-        
+       
 
 # PLAY COMMAND 
 @client.tree.command(name="play", description="Start a full Tic-Tac-Feet game with your opponent")
