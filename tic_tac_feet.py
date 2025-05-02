@@ -3,9 +3,6 @@ import random
 
 
 from discord import app_commands
-# allegedly can remove
-from discord.ext import tasks
-
 from secrets import DISCORD_TOKEN
 
 
@@ -27,7 +24,7 @@ class MyClient(discord.Client):
         synced = await self.tree.sync()
         print(f"Synced commands: {[cmd.name for cmd in synced]}")
         print(f"Logged in as {self.user}")
-        
+       
 
 client = MyClient()
 
@@ -43,6 +40,33 @@ class GameState:
         self.tiles = [[None for _ in range(9)] for _ in range(9)]  # 9 boards of 9 tiles
         self.active_board = None  # None = free choice
         self.message = None
+    
+    def check_winner(self, board: list[str | None]) -> str | None:
+        win_patterns = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8],  # Rows
+            [0, 3, 6], [1, 4, 7], [2, 5, 8],  # Columns
+            [0, 4, 8], [2, 4, 6]              # Diagonals
+        ]
+        for a, b, c in win_patterns:
+            if board[a] and board[a] == board[b] == board[c]:
+                return board[a] # "X" or "O"
+        return None
+        
+    def place_tile(self, board_index: int, tile_index: int, symbol: str):
+        self.tiles[board_index][tile_index] = symbol
+
+        # Check for win on this board
+        if self.meta_board[board_index] is None:
+            winner = self.check_winner(self.tiles[board_index])
+            if winner:
+                self.meta_board[board_index] = winner
+
+        # Decide next active board
+        if self.meta_board[tile_index] is None and any(t is None for t in self.tiles[tile_index]):
+            self.active_board = tile_index
+        else:
+            self.active_board = None  # Free play
+
 
 
 
@@ -61,6 +85,10 @@ class GameState:
                             emoji = "❌"
                         elif tile == "O":
                             emoji = "🟢"
+                        elif self.meta_board[board_index] == "X":
+                            emoji = "❌"
+                        elif self.meta_board[board_index] == "O":
+                            emoji = "🟢"
                         elif self.active_board == board_index:
                             emoji = "🟨"
                         else:
@@ -78,7 +106,9 @@ class BoardSelectView(discord.ui.View):
         super().__init__(timeout=None)
         self.game = game
         for i in range(9):
-            self.add_item(BoardSelectButton(i, game))
+            if game.meta_board[i] is None:
+                self.add_item(BoardSelectButton(i, game))
+
 
 
 class BoardSelectButton(discord.ui.Button):
@@ -142,15 +172,9 @@ class TileSelectButton(discord.ui.Button):
             await interaction.response.send_message("⛔ Not your turn.", ephemeral=True, delete_after=4)
             return
 
-        board = self.game.active_board
-        self.game.tiles[board][self.tile_index] = "X" if self.game.current_turn == self.game.player1 else "O"
+        symbol = "X" if self.game.current_turn == self.game.player1 else "O"
+        self.game.place_tile(self.game.active_board, self.tile_index, symbol)
 
-        # Determine next active board
-        next_board = self.tile_index
-        if self.game.meta_board[next_board] is None and any(tile is None for tile in self.game.tiles[next_board]):
-            self.game.active_board = next_board
-        else:
-            self.game.active_board = None  # Free play
 
         # Switch turn
         self.game.current_turn = self.game.player2 if self.game.current_turn == self.game.player1 else self.game.player1
