@@ -113,18 +113,26 @@ class BoardSelectView(discord.ui.View):
     def __init__(self, game: GameState):
         super().__init__(timeout=None)
         self.game = game
+
         for i in range(9):
-            if game.meta_board[i] is None:
-                row = i // 3
-                self.add_item(BoardSelectButton(i, game, row))
+            row = i // 3  # row 0 → buttons 0–2, row 1 → 3–5, row 2 → 6–8
+            is_disabled = game.meta_board[i] is not None  # disable if board is won
+            self.add_item(BoardSelectButton(i, game, row, is_disabled))
+
 
 
 
 class BoardSelectButton(discord.ui.Button):
-    def __init__(self, board_index: int, game: GameState, row: int):
-        super().__init__(label=str(board_index), style=discord.ButtonStyle.primary, row=row)
+    def __init__(self, board_index: int, game: GameState, row: int, disabled: bool):
+        super().__init__(
+            label=str(board_index),
+            style=discord.ButtonStyle.primary,
+            row=row,
+            disabled=disabled
+        )
         self.board_index = board_index
         self.game = game
+
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.game.current_turn:
@@ -148,19 +156,27 @@ class TileSelectView(discord.ui.View):
         super().__init__(timeout=None)
         self.game = game
 
-        # Only render 1 board (active or all available if free)
         boards_to_render = (
             [game.active_board] if game.active_board is not None
-            else [i for i in range(9) if game.meta_board[i] is None]
+            else list(range(9))  # Free select
         )
 
         for board_index in boards_to_render:
-            for tile_index in range(9):
-                tile_value = self.game.tiles[board_index][tile_index]
-                row = tile_index // 3
-                is_board_active = True
-                self.add_item(TileSelectButton(tile_index, game, tile_value, row, board_index, active=is_board_active))
+            board_won = game.meta_board[board_index] is not None
 
+            for tile_index in range(9):
+                tile_value = game.tiles[board_index][tile_index]
+                row = (board_index * 3) + (tile_index // 3)
+
+
+                # Always show the button, but disable it if:
+                # - the tile is already played
+                # - or we're in free select and the board is won
+                is_clickable = True
+                if tile_value in ("X", "O") or (game.active_board is None and board_won):
+                    is_clickable = False
+
+                self.add_item(TileSelectButton(tile_index, game, tile_value, row, board_index, active=is_clickable))
 
 
 class TileSelectButton(discord.ui.Button):
