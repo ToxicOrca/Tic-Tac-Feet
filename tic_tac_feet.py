@@ -73,6 +73,12 @@ class GameState:
 # RENDER LARGE BOARD
     def render_board(self):
         result = ""
+        x_pattern = ["❌", "⬛", "❌",
+                     "⬛", "❌", "⬛",
+                     "❌", "⬛", "❌"]
+        o_pattern = ["🟢", "🟢", "🟢",
+                     "🟢", "⬛", "🟢",
+                     "🟢", "🟢", "🟢"]
         for row in range(3):
             for inner_row in range(3):
                 line = ""
@@ -80,19 +86,20 @@ class GameState:
                     board_index = row * 3 + col
                     for inner_col in range(3):
                         tile_index = inner_row * 3 + inner_col
-                        tile = self.tiles[board_index][tile_index]
-                        if tile == "X":
-                            emoji = "❌"
-                        elif tile == "O":
-                            emoji = "🟢"
-                        elif self.meta_board[board_index] == "X":
-                            emoji = "❌"
+                        if self.meta_board[board_index] == "X":
+                            emoji = x_pattern[tile_index]
                         elif self.meta_board[board_index] == "O":
-                            emoji = "🟢"
-                        elif self.active_board == board_index:
-                            emoji = "🟨"
+                            emoji = o_pattern[tile_index]
                         else:
-                            emoji = "⬛"
+                            tile = self.tiles[board_index][tile_index]
+                            if tile == "X":
+                                emoji = "❌"
+                            elif tile == "O":
+                                emoji = "🟢"
+                            elif self.active_board == board_index:
+                                emoji = "🟨"
+                            else:
+                                emoji = "⬛"
                         line += emoji
                     if col < 2:
                         line += " | "
@@ -100,6 +107,7 @@ class GameState:
             if row < 2:
                 result += "―" * 16 + "\n"
         return result
+
 
 class BoardSelectView(discord.ui.View):
     def __init__(self, game: GameState):
@@ -139,16 +147,20 @@ class TileSelectView(discord.ui.View):
         super().__init__(timeout=None)
         self.game = game
         current_board = self.game.active_board
+        
+        # Skip if the board is already won (should never get here in theory)
+        if game.meta_board[current_board] is not None:
+            return
 
         for tile_index in range(9):
             tile_value = self.game.tiles[current_board][tile_index]
-            self.add_item(TileSelectButton(tile_index, game, tile_value))
+            row = tile_index // 3
+            self.add_item(TileSelectButton(tile_index, game, tile_value, row))
 
 
 
 class TileSelectButton(discord.ui.Button):
-    def __init__(self, tile_index: int, game: GameState, value: str | None):
-        row = tile_index // 3
+    def __init__(self, tile_index: int, game: GameState, value: str | None, row: int):
         label = "\u200B"
         style = discord.ButtonStyle.secondary
         disabled = False
