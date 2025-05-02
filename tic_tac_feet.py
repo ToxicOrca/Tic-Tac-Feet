@@ -206,20 +206,7 @@ class TileSelectButton(discord.ui.Button):
 
         self.game.current_turn = self.game.player2 if self.game.current_turn == self.game.player1 else self.game.player1
         
-        await interaction.response.defer()
-        
-        # Check for game win big board
-        if self.game.meta_winner:
-            winner = self.game.meta_winner
-            symbol = "❌" if winner == "X" else "🟢"
-            await interaction.followup.send(
-                f"🏆 {symbol} <@{self.game.player1 if winner == 'X' else self.game.player2}> **wins the game!**"
-            )
-            game_key = tuple(sorted((self.game.player1, self.game.player2)))
-            active_games.pop(game_key, None)
-            return
-
-        
+        await interaction.response.defer()     
 
         content = f"🎮 <@{self.game.player1}> vs <@{self.game.player2}>\n"
         symbol = "❌" if self.game.current_turn == self.game.player1 else "🟢"
@@ -230,6 +217,27 @@ class TileSelectButton(discord.ui.Button):
             await self.game.message.edit(content=content, view=BoardSelectView(self.game))
         else:
             await self.game.message.edit(content=content, view=TileSelectView(self.game))
+            
+            
+        # Check for game win big board
+        if self.game.meta_winner:
+            winner = self.game.meta_winner
+            symbol = "❌" if winner == "X" else "🟢"
+            winner_id = self.game.player1 if winner == "X" else self.game.player2
+
+            # Send win message and store it
+            msg = await interaction.followup.send(
+                f"🏆 {symbol} <@{winner_id}> **wins the game!**"
+            )
+            
+            # Disable game board buttons
+            await self.game.message.edit(view=discord.ui.View(timeout=0))
+            
+            # clean up the game
+            game_key = tuple(sorted((self.game.player1, self.game.player2)))
+            active_games.pop(game_key, None)
+            return
+
        
 
 # PLAY COMMAND 
@@ -269,7 +277,11 @@ async def resign(interaction: discord.Interaction):
         if user_id in key:
             # Found the game
             opponent_id = key[0] if key[1] == user_id else key[1]
-            active_games.pop(key, None)
+            game = active_games.pop(key, None)
+            
+            # Disable game board buttons
+            if game.message:
+                await game.message.edit(view=discord.ui.View(timeout=0))
 
             await interaction.response.send_message(
                 f"🏳️ <@{user_id}> has resigned. <@{opponent_id}> wins by forfeit!")
