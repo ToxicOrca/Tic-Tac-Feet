@@ -106,7 +106,7 @@ class GameState:
                             elif tile == "O":
                                 emoji = "🟢"
                             elif self.active_board == board_index:
-                                emoji = "🟨"
+                                emoji = "🟦"
                             else:
                                 emoji = "⬛"
                         line += emoji
@@ -134,8 +134,8 @@ class BoardSelectView(discord.ui.View):
 class BoardSelectButton(discord.ui.Button):
     def __init__(self, board_index: int, game: GameState, row: int, disabled: bool):
         super().__init__(
-            label="🟨",
-            style=discord.ButtonStyle.secondary,
+            label="🟦",
+            style=discord.ButtonStyle.primary,
             row=row,
             disabled=disabled
         )
