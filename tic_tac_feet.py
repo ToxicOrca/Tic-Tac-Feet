@@ -204,21 +204,7 @@ class TileSelectButton(discord.ui.Button):
         symbol = "X" if self.game.current_turn == self.game.player1 else "O"
         self.game.place_tile(self.board_index, self.tile_index, symbol)
 
-        self.game.current_turn = self.game.player2 if self.game.current_turn == self.game.player1 else self.game.player1
-        
-        await interaction.response.defer()     
 
-        content = f"<@{self.game.player1}> vs <@{self.game.player2}>\n"
-        symbol = "❌" if self.game.current_turn == self.game.player1 else "🟢"
-        content += f"It's {symbol} <@{self.game.current_turn}>'s turn.\n\n"
-        content += self.game.render_board() + "\n\u200B"
-
-        if self.game.active_board is None:
-            await self.game.message.edit(content=content, view=BoardSelectView(self.game))
-        else:
-            await self.game.message.edit(content=content, view=TileSelectView(self.game))
-            
-            
         # Check for game win big board
         if self.game.meta_winner:
             winner = self.game.meta_winner
@@ -237,6 +223,23 @@ class TileSelectButton(discord.ui.Button):
             game_key = tuple(sorted((self.game.player1, self.game.player2)))
             active_games.pop(game_key, None)
             return
+
+
+
+        self.game.current_turn = self.game.player2 if self.game.current_turn == self.game.player1 else self.game.player1        
+        await interaction.response.defer()     
+
+        content = f"<@{self.game.player1}> vs <@{self.game.player2}>\n"
+        symbol = "❌" if self.game.current_turn == self.game.player1 else "🟢"
+        content += f"It's {symbol} <@{self.game.current_turn}>'s turn.\n\n"
+        content += self.game.render_board() + "\n\u200B"
+
+        if self.game.active_board is None:
+            await self.game.message.edit(content=content, view=BoardSelectView(self.game))
+        else:
+            await self.game.message.edit(content=content, view=TileSelectView(self.game))
+            
+           
 
        
 
