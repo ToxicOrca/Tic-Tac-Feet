@@ -3,7 +3,7 @@ import random
 
 
 from discord import app_commands
-from secrets import DISCORD_TOKEN
+from discord_secrets import DISCORD_TOKEN
 
 
 # Enable intents with member access
@@ -270,10 +270,11 @@ async def play(interaction: discord.Interaction, opponent: discord.User):
     content += f"<@{game.current_turn}> goes first!\n\n"
     content += game.render_board() + "\n\u200B"
 
-    message = await interaction.response.send_message(content=content, view=view)
-    game.message = await interaction.original_response()
+    await interaction.response.defer()  # Acknowledge the command
+    game.message = await interaction.channel.send(content=content, view=view)  # Send regular message
 
     active_games[game_key] = game
+
 
 
 

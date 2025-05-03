@@ -162,4 +162,4 @@ cython_debug/
 
 
 # Local secrets and config files
-secrets.py
+discord_secrets.py
