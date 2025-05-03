@@ -1,18 +1,18 @@
 # 🦶 Tic-Tac-Feet - A Discord Bot Game
 
-Tic-Tac-Feet is a fun, multiplayer Discord bot game based on a twist of Tic-Tac-Toe — where players battle over 9 boards in a mega match. Each move determines where your opponent can play next. First to claim 3 small boards in a row wins the game!
+Tic-Tac-Feet is a fun, multiplayer Discord bot game based on a twist of Tic-Tac-Toe — where players battle over 9 boards on one mega board. Each move determines where your opponent can play next. First to claim 3 small boards in a row wins the game!
 
 ---
 
 ## 🎮 Features
 
 - Multiplayer 1v1 gameplay
-- 9-board "Ultimate Tic-Tac-Toe" format
 - Button-based interactive game UI
 - Auto win detection & game over messaging
 - Emoji-based visual board display
-- Blue squares show active board.
+- Blue squares show active board
 - Channel-specific restrictions (can only be played in `#tic-tac-feet`)
+- / commands with autofill
 
 ---
 
