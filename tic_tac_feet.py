@@ -165,7 +165,10 @@ class TileSelectView(discord.ui.View):
         super().__init__(timeout=None)
         self.game = game
 
-        board_index = game.active_board if game.active_board is not None else 0
+        if game.active_board is None:
+            raise ValueError("TileSelectView should only be used when a specific active_board is set.")
+        board_index = game.active_board
+
 
         for tile_index in range(9):
             tile_value = game.tiles[board_index][tile_index]
@@ -234,11 +237,13 @@ class TileSelectButton(discord.ui.Button):
         content += f"It's {symbol} <@{self.game.current_turn}>'s turn.\n\n"
         content += self.game.render_board() + "\n\u200B"
 
-        if self.game.active_board is None:
-            await self.game.message.edit(content=content, view=BoardSelectView(self.game))
-        else:
-            await self.game.message.edit(content=content, view=TileSelectView(self.game))
-            
+        try:
+            if self.game.active_board is None:
+                await self.game.message.edit(content=content, view=BoardSelectView(self.game))
+            else:
+                await self.game.message.edit(content=content, view=TileSelectView(self.game))
+        except Exception as e:
+            print(f"Error updating board view: {e}")
            
 
        
