@@ -1,4 +1,10 @@
-# 🦶 Tic-Tac-Feet - A Discord Bot Game
+<table>
+  <tr>
+    <td><img src="tic_tac_feet_icon.png" width="96" alt="Tic-Tac-Feet Icon"></td>
+    <td><h1>Tic-Tac-Feet - A Discord Bot Game</h1></td>
+  </tr>
+</table>
+
 
 Tic-Tac-Feet is a fun, multiplayer Discord bot game based on a twist of Tic-Tac-Toe — where players battle over 9 boards on one mega board. Each move determines where your opponent can play next. First to claim 3 small boards in a row wins the game!
 
@@ -36,7 +42,7 @@ Command	Description
 - `/resign`	Resign your current match and let your opponent win
 
 # 📷 Preview
-![Banner](https://i.postimg.cc/44PXRFq6/game-image.png)
+![Banner](game_image.png)
 
 # 🔒 Bot Permissions
 When inviting the bot to your server, make sure it has the following permissions:
