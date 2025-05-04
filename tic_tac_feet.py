@@ -215,7 +215,7 @@ class TileSelectButton(discord.ui.Button):
             winner_id = self.game.player1 if winner == "X" else self.game.player2
 
             # Send win message and store it
-            msg = await interaction.followup.send(
+            msg = await interaction.channel.send(
                 f"🏆 {symbol} <@{winner_id}> **wins the game!**"
             )
             
