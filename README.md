@@ -1,7 +1,7 @@
 <table>
   <tr>
     <td><img src="tic_tac_feet_icon.png" width="96" alt="Tic-Tac-Feet Icon"></td>
-    <td><h1>Tic-Tac-Feet - A Discord Bot Game</h1></td>
+    <td><h1>Tic-Tac-Feet  A Discord Bot Game</h1></td>
   </tr>
 </table>
 
@@ -19,6 +19,9 @@ Tic-Tac-Feet is a fun, multiplayer Discord bot game based on a twist of Tic-Tac-
 - Blue squares show active board
 - Channel-specific restrictions (can only be played in `#tic-tac-feet`)
 - / commands with autofill
+
+# 📷 Preview
+![Banner](game_image.png)
 
 ---
 
@@ -40,9 +43,6 @@ Tic-Tac-Feet is a fun, multiplayer Discord bot game based on a twist of Tic-Tac-
 Command	Description
 - `/play` @user	Starts a new game with the mentioned user
 - `/resign`	Resign your current match and let your opponent win
-
-# 📷 Preview
-![Banner](game_image.png)
 
 # 🔒 Bot Permissions
 When inviting the bot to your server, make sure it has the following permissions:
