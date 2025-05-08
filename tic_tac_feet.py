@@ -5,6 +5,10 @@ import random
 from discord import app_commands
 from discord_secrets import DISCORD_TOKEN
 
+# names cmd window
+import ctypes
+ctypes.windll.kernel32.SetConsoleTitleW("Tic-Tac-Feet")
+
 
 # Enable intents with member access
 intents = discord.Intents.default()
@@ -207,34 +211,12 @@ class TileSelectButton(discord.ui.Button):
         symbol = "X" if self.game.current_turn == self.game.player1 else "O"
         self.game.place_tile(self.board_index, self.tile_index, symbol)
 
+        await interaction.response.defer()
 
-        # Check for game win big board
-        if self.game.meta_winner:
-            winner = self.game.meta_winner
-            symbol = "❌" if winner == "X" else "🟢"
-            winner_id = self.game.player1 if winner == "X" else self.game.player2
-
-            # Send win message and store it
-            msg = await interaction.channel.send(
-                f"🏆 {symbol} <@{winner_id}> **wins the game!**"
-            )
-            
-            # Disable game board buttons
-            await self.game.message.edit(view=discord.ui.View(timeout=0))
-            
-            # clean up the game
-            game_key = tuple(sorted((self.game.player1, self.game.player2)))
-            active_games.pop(game_key, None)
-            return
-
-
-
-        self.game.current_turn = self.game.player2 if self.game.current_turn == self.game.player1 else self.game.player1        
-        await interaction.response.defer()     
-
+        # Always update the board to show the placed tile
         content = f"<@{self.game.player1}> vs <@{self.game.player2}>\n"
-        symbol = "❌" if self.game.current_turn == self.game.player1 else "🟢"
-        content += f"It's {symbol} <@{self.game.current_turn}>'s turn.\n\n"
+        current_symbol = "❌" if symbol == "X" else "🟢"
+        content += f"{current_symbol} placed by <@{interaction.user.id}>.\n\n"
         content += self.game.render_board() + "\n\u200B"
 
         try:
@@ -244,7 +226,23 @@ class TileSelectButton(discord.ui.Button):
                 await self.game.message.edit(content=content, view=TileSelectView(self.game))
         except Exception as e:
             print(f"Error updating board view: {e}")
-           
+
+        # Check for winner AFTER updating board state
+        if self.game.meta_winner:
+            winner = self.game.meta_winner
+            symbol = "❌" if winner == "X" else "🟢"
+            winner_id = self.game.player1 if winner == "X" else self.game.player2
+
+            await self.game.message.reply(f"🏆 {symbol} <@{winner_id}> **wins the game!**")
+            await self.game.message.edit(view=discord.ui.View(timeout=0))
+            game_key = tuple(sorted((self.game.player1, self.game.player2)))
+            active_games.pop(game_key, None)
+            return
+
+        # Switch turns only if no winner
+        self.game.current_turn = self.game.player2 if self.game.current_turn == self.game.player1 else self.game.player1
+
+               
 
        
 
