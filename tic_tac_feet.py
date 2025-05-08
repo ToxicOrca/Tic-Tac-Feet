@@ -203,46 +203,75 @@ class TileSelectButton(discord.ui.Button):
         self.board_index = board_index
         self.game = game
 
+    
+    
+    
     async def callback(self, interaction: discord.Interaction):
+        # 1) turn check
         if interaction.user.id != self.game.current_turn:
-            await interaction.response.send_message("⛔ Not your turn.", ephemeral=True, delete_after=4)
-            return
+            return await interaction.response.send_message(
+                "⛔ Not your turn.",
+                ephemeral=True,
+                delete_after=4
+            )
 
+        # 2) place the tile
         symbol = "X" if self.game.current_turn == self.game.player1 else "O"
         self.game.place_tile(self.board_index, self.tile_index, symbol)
 
-        await interaction.response.defer()
+        # 3) re-render board
+        board_str = self.game.render_board()
 
-        # Always update the board to show the placed tile
-        content = f"<@{self.game.player1}> vs <@{self.game.player2}>\n"
-        current_symbol = "❌" if symbol == "X" else "🟢"
-        content += f"{current_symbol} placed by <@{interaction.user.id}>.\n\n"
-        content += self.game.render_board() + "\n\u200B"
-
-        try:
-            if self.game.active_board is None:
-                await self.game.message.edit(content=content, view=BoardSelectView(self.game))
-            else:
-                await self.game.message.edit(content=content, view=TileSelectView(self.game))
-        except Exception as e:
-            print(f"Error updating board view: {e}")
-
-        # Check for winner AFTER updating board state
+        # 4) check for full-game win
         if self.game.meta_winner:
-            winner = self.game.meta_winner
-            symbol = "❌" if winner == "X" else "🟢"
-            winner_id = self.game.player1 if winner == "X" else self.game.player2
+            win = self.game.meta_winner
+            win_emoji = "❌" if win == "X" else "🟢"
+            winner_id = self.game.player1 if win == "X" else self.game.player2
 
-            await self.game.message.reply(f"🏆 {symbol} <@{winner_id}> **wins the game!**")
-            await self.game.message.edit(view=discord.ui.View(timeout=0))
-            game_key = tuple(sorted((self.game.player1, self.game.player2)))
-            active_games.pop(game_key, None)
+            final_content = (
+                f"<@{self.game.player1}> vs <@{self.game.player2}>\n"
+                f"{board_str}\n"
+                f"🏆 {win_emoji} <@{winner_id}> **wins the game!**"
+            )
+            # edit the original message, clear buttons
+            await interaction.response.edit_message(
+                content=final_content,
+                view=None
+            )
+
+            # clean up in-memory state
+            key = tuple(sorted((self.game.player1, self.game.player2)))
+            active_games.pop(key, None)
             return
 
-        # Switch turns only if no winner
-        self.game.current_turn = self.game.player2 if self.game.current_turn == self.game.player1 else self.game.player1
+        # 5) no win → switch turns
+        self.game.current_turn = (
+            self.game.player2
+            if self.game.current_turn == self.game.player1
+            else self.game.player1
+        )
+        next_emoji = "❌" if self.game.current_turn == self.game.player1 else "🟢"
 
-               
+        # 6) build the “next turn” message
+        content = (
+            f"<@{self.game.player1}> vs <@{self.game.player2}>\n"
+            f"It's {next_emoji} <@{self.game.current_turn}>'s turn.\n"
+            f"{board_str}\n\n"
+        
+        )
+
+        # 7) choose the right view
+        view = (
+            BoardSelectView(self.game)
+            if self.game.active_board is None
+            else TileSelectView(self.game)
+        )
+
+        # 8) finally, edit the original message
+        await interaction.response.edit_message(
+            content=content,
+            view=view
+        )      
 
        
 
@@ -250,28 +279,47 @@ class TileSelectButton(discord.ui.Button):
 @client.tree.command(name="play", description="Start a full Tic-Tac-Feet game with your opponent")
 @app_commands.describe(opponent="The user you are playing against")
 async def play(interaction: discord.Interaction, opponent: discord.User):
+    # 1) Channel guard
     if interaction.channel.name != "tic-tac-feet":
-        await interaction.response.send_message("⛔ This game can only be played in #tic-tac-feet.", ephemeral=True, delete_after=4)
-        return
-    if interaction.user.id == opponent.id:
-        await interaction.response.send_message("😅 You can't play against yourself!", ephemeral=True, delete_after=4)
-        return
+        return await interaction.response.send_message(
+            "⛔ This game can only be played in #tic-tac-feet.",
+            ephemeral=True,
+            delete_after=4
+        )
 
+    # 2) Can't play yourself
+    if interaction.user.id == opponent.id:
+        return await interaction.response.send_message(
+            "😅 You can't play against yourself!", ephemeral=True, delete_after=4
+        )
+
+    # 3) Already playing?
     game_key = tuple(sorted((interaction.user.id, opponent.id)))
     if game_key in active_games:
-        await interaction.response.send_message("⚠️ You already have an active game with this player.", ephemeral=True, delete_after=4)
-        return
+        return await interaction.response.send_message(
+            "⚠️ You already have an active game with this player.",
+            ephemeral=True,
+            delete_after=4
+        )
 
+    # 4) Initialize game state + view
     game = GameState(interaction.user.id, opponent.id)
     view = BoardSelectView(game)
-    content = f"<@{game.player1}> vs <@{game.player2}>\n"
-    content += f"<@{game.current_turn}> goes first!\n\n"
-    content += game.render_board() + "\n\u200B"
+    content = (
+        f"🎮 <@{game.player1}> vs <@{game.player2}>\n"
+        f"<@{game.current_turn}> goes first!\n\n"
+        f"{game.render_board()}\n\u200B"
+    )
 
-    await interaction.response.defer()  # Acknowledge the command
-    game.message = await interaction.channel.send(content=content, view=view)  # Send regular message
+    # 5) Send the game board as the *initial* response
+    await interaction.response.send_message(content=content, view=view)
 
+    # 6) Grab that message so we can edit it later
+    game.message = await interaction.original_response()
+
+    # 7) Store in active_games
     active_games[game_key] = game
+
 
 
 
