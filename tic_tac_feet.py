@@ -134,7 +134,6 @@ class BoardSelectView(discord.ui.View):
 
 
 
-
 class BoardSelectButton(discord.ui.Button):
     def __init__(self, board_index: int, game: GameState, row: int, disabled: bool):
         super().__init__(
@@ -146,22 +145,31 @@ class BoardSelectButton(discord.ui.Button):
         self.board_index = board_index
         self.game = game
 
-
     async def callback(self, interaction: discord.Interaction):
+        # 1) turn-guard
         if interaction.user.id != self.game.current_turn:
-            await interaction.response.send_message("⛔ Not your turn.", ephemeral=True, delete_after=4)
-            return
+            return await interaction.response.send_message(
+                "⛔ Not your turn.", ephemeral=True, delete_after=4
+            )
 
+        # 2) set active sub-board
         self.game.active_board = self.board_index
-        
-        await interaction.response.defer()  # 👈 tells Discord “I got this!”
-        
-        content = f"<@{self.game.player1}> vs <@{self.game.player2}>\n"
-        symbol = "❌" if self.game.current_turn == self.game.player1 else "🟢"
-        content += f"It's {symbol} <@{self.game.current_turn}>'s turn.\n\n"
 
-        content += self.game.render_board() + "\n​"
-        await self.game.message.edit(content=content, view=TileSelectView(self.game))
+        # 3) rebuild board + tile view
+        next_symbol = "❌" if self.game.current_turn == self.game.player1 else "🟢"
+        content = (
+            f"<@{self.game.player1}> vs <@{self.game.player2}>\n"
+            f"It's {next_symbol} <@{self.game.current_turn}>'s turn.\n\n"
+            f"{self.game.render_board()}\n\u200B"
+        )
+        new_view = TileSelectView(self.game)
+
+        # 4) *one* call to edit the original message:
+        await interaction.response.edit_message(
+            content=content,
+            view=new_view
+        )
+
 
 
 class TileSelectView(discord.ui.View):
@@ -205,73 +213,55 @@ class TileSelectButton(discord.ui.Button):
 
     
     
-    
+   
     async def callback(self, interaction: discord.Interaction):
-        # 1) turn check
+        # 1) Turn‐guard
         if interaction.user.id != self.game.current_turn:
             return await interaction.response.send_message(
-                "⛔ Not your turn.",
-                ephemeral=True,
-                delete_after=4
+                "⛔ Not your turn.", ephemeral=True, delete_after=4
             )
 
-        # 2) place the tile
+        # 2) Place the tile
         symbol = "X" if self.game.current_turn == self.game.player1 else "O"
         self.game.place_tile(self.board_index, self.tile_index, symbol)
-
-        # 3) re-render board
         board_str = self.game.render_board()
 
-        # 4) check for full-game win
+        # 3) Check for game end (win or scratch)…
         if self.game.meta_winner:
-            win = self.game.meta_winner
-            win_emoji = "❌" if win == "X" else "🟢"
-            winner_id = self.game.player1 if win == "X" else self.game.player2
-
-            final_content = (
+            # build final content + teardown…
+            final = (
                 f"<@{self.game.player1}> vs <@{self.game.player2}>\n"
-                f"{board_str}\n"
-                f"🏆 {win_emoji} <@{winner_id}> **wins the game!**"
+                f"{board_str}\n\n"
+                f"🏆 {'❌' if self.game.meta_winner=='X' else '🟢'} "
+                f"<@{(self.game.player1 if self.game.meta_winner=='X' else self.game.player2)}> wins!"
             )
-            # edit the original message, clear buttons
-            await interaction.response.edit_message(
-                content=final_content,
-                view=None
-            )
+            return await interaction.response.edit_message(content=final, view=None)
 
-            # clean up in-memory state
-            key = tuple(sorted((self.game.player1, self.game.player2)))
-            active_games.pop(key, None)
-            return
+        if all(cell is not None for cell in self.game.meta_board):
+            # scratch
+            final = f"{board_str}\n\n🤝 It's a scratch!"
+            return await interaction.response.edit_message(content=final, view=None)
 
-        # 5) no win → switch turns
+        # 4) No end → switch turns
         self.game.current_turn = (
-            self.game.player2
-            if self.game.current_turn == self.game.player1
+            self.game.player2 if self.game.current_turn == self.game.player1
             else self.game.player1
         )
         next_emoji = "❌" if self.game.current_turn == self.game.player1 else "🟢"
 
-        # 6) build the “next turn” message
+        # 5) Build next‐turn content + view
         content = (
             f"<@{self.game.player1}> vs <@{self.game.player2}>\n"
-            f"It's {next_emoji} <@{self.game.current_turn}>'s turn.\n"
-            f"{board_str}\n\n"
-        
+            f"It's {next_emoji} <@{self.game.current_turn}>'s turn.\n\n"
+            f"{board_str}\n\u200B"
         )
-
-        # 7) choose the right view
-        view = (
-            BoardSelectView(self.game)
-            if self.game.active_board is None
+        new_view = (
+            BoardSelectView(self.game) if self.game.active_board is None
             else TileSelectView(self.game)
         )
 
-        # 8) finally, edit the original message
-        await interaction.response.edit_message(
-            content=content,
-            view=view
-        )      
+        # 6) Single edit to original message
+        await interaction.response.edit_message(content=content, view=new_view)
 
        
 
@@ -354,12 +344,6 @@ async def resign(interaction: discord.Interaction):
         ephemeral=True,
         delete_after=4
     )
-
-
-
-
-
-
 
 
 
